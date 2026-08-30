@@ -1,3 +1,10 @@
-TEAM_ID=
 BUNDLE_ID=io.github.klover
 APP_NAME=Klover
+
+// Your Apple Development Team ID is kept out of version control.
+// Copy Local.xcconfig.template to Local.xcconfig and set TEAM_ID there (it's gitignored).
+// Empty by default so simulator builds work without any local setup.
+TEAM_ID=
+
+// Included last so Local.xcconfig can override TEAM_ID above.
+#include? "Local.xcconfig"

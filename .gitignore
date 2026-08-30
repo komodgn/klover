@@ -1,6 +1,8 @@
 *.iml
 .kotlin
 .gradle
+# iOS signing: Team ID stays local, never committed
+iosApp/Configuration/Local.xcconfig
 **/build/
 xcuserdata
 !src/**/build/
