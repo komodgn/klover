@@ -1,0 +1,42 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:name="clover"
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.80"
+        android:scaleY="0.80">
+        <path
+            android:fillColor="#43A047"
+            android:strokeColor="#2E7D32"
+            android:strokeWidth="1.4"
+            android:pathData="M54,54 C54,54 36,40 36,28 C36,20 42,16 48,16 C52,16 54,20 54,22 C54,20 56,16 60,16 C66,16 72,20 72,28 C72,40 54,54 54,54 Z" />
+        <group android:pivotX="54" android:pivotY="54" android:rotation="90">
+            <path
+                android:fillColor="#43A047"
+                android:strokeColor="#2E7D32"
+                android:strokeWidth="1.4"
+                android:pathData="M54,54 C54,54 36,40 36,28 C36,20 42,16 48,16 C52,16 54,20 54,22 C54,20 56,16 60,16 C66,16 72,20 72,28 C72,40 54,54 54,54 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="180">
+            <path
+                android:fillColor="#43A047"
+                android:strokeColor="#2E7D32"
+                android:strokeWidth="1.4"
+                android:pathData="M54,54 C54,54 36,40 36,28 C36,20 42,16 48,16 C52,16 54,20 54,22 C54,20 56,16 60,16 C66,16 72,20 72,28 C72,40 54,54 54,54 Z" />
+        </group>
+        <group android:pivotX="54" android:pivotY="54" android:rotation="270">
+            <path
+                android:fillColor="#43A047"
+                android:strokeColor="#2E7D32"
+                android:strokeWidth="1.4"
+                android:pathData="M54,54 C54,54 36,40 36,28 C36,20 42,16 48,16 C52,16 54,20 54,22 C54,20 56,16 60,16 C66,16 72,20 72,28 C72,40 54,54 54,54 Z" />
+        </group>
+        <path
+            android:fillColor="#2E7D32"
+            android:pathData="M49.8,54 a4.2,4.2 0 1,0 8.4,0 a4.2,4.2 0 1,0 -8.4,0 Z" />
+    </group>
+</vector>

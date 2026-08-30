@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="app_name">네잎클로버 찾기</string>
+    <string name="top_bar_title">네잎클로버 찾기 🍀</string>
+    <string name="prompt_idle">잔디밭을 스캔해 행운의 네잎클로버를 찾아보세요.</string>
+    <string name="status_detecting">찾는 중…</string>
+    <string name="result_found">네잎클로버 %d개 발견! 🍀</string>
+    <string name="result_not_found">이번엔 못 찾았어요. 다시 시도해 보세요!</string>
+    <string name="detection_item">#%1$d  신뢰도 %2$d%%</string>
+    <string name="inference_time">추론 시간 %dms</string>
+    <string name="action_detect">네잎클로버 찾기</string>
+    <string name="action_retry">다시 찾기</string>
+    <string name="action_pick_photo">사진 선택</string>
+    <string name="brand_label">KLOVER</string>
+    <string name="fps_format">%d fps</string>
+    <string name="scan_hint">클로버를 화면에 담아보세요</string>
+    <string name="camera_permission_needed">카메라 권한이 필요해요</string>
+    <string name="camera_permission_grant">권한 허용</string>
+    <string name="ios_camera_todo">iOS 카메라는 준비 중이에요</string>
+</resources>

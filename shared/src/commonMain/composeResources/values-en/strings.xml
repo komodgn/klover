@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<resources>
+    <string name="app_name">Four-Leaf Clover Finder</string>
+    <string name="top_bar_title">Clover Finder 🍀</string>
+    <string name="prompt_idle">Scan the grass to find a lucky four-leaf clover.</string>
+    <string name="status_detecting">Searching…</string>
+    <string name="result_found">Found %d four-leaf clover(s)! 🍀</string>
+    <string name="result_not_found">None this time. Give it another try!</string>
+    <string name="detection_item">#%1$d  confidence %2$d%%</string>
+    <string name="inference_time">Inference %dms</string>
+    <string name="action_detect">Find clover</string>
+    <string name="action_retry">Search again</string>
+    <string name="action_pick_photo">Pick a photo</string>
+    <string name="brand_label">KLOVER</string>
+    <string name="fps_format">%d fps</string>
+    <string name="scan_hint">Point the camera at some clover</string>
+    <string name="camera_permission_needed">Camera permission required</string>
+    <string name="camera_permission_grant">Grant permission</string>
+    <string name="ios_camera_todo">iOS camera coming soon</string>
+</resources>
