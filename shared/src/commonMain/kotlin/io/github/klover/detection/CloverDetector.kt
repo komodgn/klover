@@ -1,5 +1,7 @@
 package io.github.klover.detection
 
+import androidx.compose.runtime.Stable
+
 /**
  * Finds four-leaf clovers in an image.
  *
@@ -11,6 +13,7 @@ package io.github.klover.detection
  * Keeping the UI depend only on this interface means swapping in a real model never touches the
  * screens or the ViewModel.
  */
+@Stable
 interface CloverDetector {
     suspend fun detect(image: CloverImage): DetectionResult
 }

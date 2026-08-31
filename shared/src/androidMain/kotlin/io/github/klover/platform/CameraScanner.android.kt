@@ -40,15 +40,13 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import io.github.klover.detection.CloverDetector
 import io.github.klover.detection.CloverImage
+import io.github.klover.detection.OnnxCloverDetector
 import klover.shared.generated.resources.Res
 import klover.shared.generated.resources.camera_permission_grant
 import klover.shared.generated.resources.camera_permission_needed
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.jetbrains.compose.resources.stringResource
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -139,7 +137,7 @@ private fun hasCameraPermission(context: Context): Boolean =
  * flight), so the live preview never blocks.
  *
  * TODO: honor the frame's rotation (ImageProxy.imageInfo.rotationDegrees) so boxes line up when the
- * device isn't upright, and skip the JPEG round-trip once the detector accepts a Bitmap directly.
+ * device isn't upright.
  */
 private class CloverFrameAnalyzer(
     private val detectorState: State<CloverDetector>,
@@ -170,15 +168,13 @@ private class CloverFrameAnalyzer(
             raw
         }
         scope.launch {
-            val bytes = withContext(Dispatchers.Default) {
-                ByteArrayOutputStream().use { out ->
-                    bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out)
-                    out.toByteArray()
-                }
+            val detector = detectorState.value
+            // OnnxCloverDetector accepts a Bitmap directly, skipping the JPEG encode/decode cycle.
+            // MockCloverDetector ignores the image entirely, so a placeholder is fine.
+            val result = when (detector) {
+                is OnnxCloverDetector -> detector.detectBitmap(bitmap)
+                else -> detector.detect(CloverImage.placeholder(bitmap.width))
             }
-            val result = detectorState.value.detect(
-                CloverImage(bytes, bitmap.width, bitmap.height),
-            )
             val now = System.currentTimeMillis()
             val fps = if (lastFrameTs > 0L) {
                 (1000f / (now - lastFrameTs).coerceAtLeast(1L)).toInt()
