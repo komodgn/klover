@@ -48,51 +48,65 @@ class OnnxCloverDetector : CloverDetector {
     }
 
     override suspend fun detect(image: CloverImage): DetectionResult {
-        val ortSession = ensureSession() ?: return fallback.detect(image)
-        val environment = env ?: return fallback.detect(image)
-        val input = preprocess(image.bytes) ?: return fallback.detect(image)
-
         return withContext(Dispatchers.Default) {
-            val mark = TimeSource.Monotonic.markNow()
-            val n = YoloConfig.INPUT_SIZE.toLong()
-            val tensor = OnnxTensor.createTensor(
-                environment,
-                FloatBuffer.wrap(input),
-                longArrayOf(1, 3, n, n),
-            )
-            val detections = tensor.use { t ->
-                val inputName = ortSession.inputNames.first()
-                ortSession.run(mapOf(inputName to t)).use { result ->
-                    val onnx: OnnxValue = result.iterator().next().value
-                    val decoded = flattenOutput(onnx.value)
-                    if (decoded == null) return@use null
-                    val (flat, channels, anchors) = decoded
-                    decodeYoloOutput(flat, channels, anchors)
-                }
-            } ?: return@withContext fallback.detect(image)
-
-            val elapsed = mark.elapsedNow().inWholeMilliseconds
-            Log.d(TAG, "inference ${elapsed}ms -> ${detections.size} four-leaf detection(s)")
-            DetectionResult(detections, elapsed)
+            val ortSession = ensureSession() ?: return@withContext fallback.detect(image)
+            val environment = env ?: return@withContext fallback.detect(image)
+            val input = preprocess(image.bytes) ?: return@withContext fallback.detect(image)
+            infer(ortSession, environment, input) ?: fallback.detect(image)
         }
     }
 
-    /** Decode encoded image bytes and produce a normalized CHW float buffer for YOLO input. */
+    /** Called by the camera scanner to skip the JPEG encode/decode round-trip. */
+    suspend fun detectBitmap(bitmap: Bitmap): DetectionResult {
+        return withContext(Dispatchers.Default) {
+            val ortSession = ensureSession() ?: return@withContext fallback.detect(CloverImage.placeholder(bitmap.width))
+            val environment = env ?: return@withContext fallback.detect(CloverImage.placeholder(bitmap.width))
+            val input = preprocessBitmap(bitmap)
+            infer(ortSession, environment, input) ?: fallback.detect(CloverImage.placeholder(bitmap.width))
+        }
+    }
+
+    private fun infer(session: OrtSession, env: OrtEnvironment, input: FloatArray): DetectionResult? {
+        val mark = TimeSource.Monotonic.markNow()
+        val n = YoloConfig.INPUT_SIZE.toLong()
+        val tensor = OnnxTensor.createTensor(
+            env,
+            FloatBuffer.wrap(input),
+            longArrayOf(1, 3, n, n),
+        )
+        val detections = tensor.use { t ->
+            val inputName = session.inputNames.first()
+            session.run(mapOf(inputName to t)).use { result ->
+                val onnx: OnnxValue = result.iterator().next().value
+                val decoded = flattenOutput(onnx.value) ?: return@use null
+                val (flat, channels, anchors) = decoded
+                decodeYoloOutput(flat, channels, anchors)
+            }
+        } ?: return null
+
+        val elapsed = mark.elapsedNow().inWholeMilliseconds
+        Log.d(TAG, "inference ${elapsed}ms -> ${detections.size} four-leaf detection(s)")
+        return DetectionResult(detections, elapsed)
+    }
+
     private fun preprocess(bytes: ByteArray): FloatArray? {
         if (bytes.isEmpty()) return null
         val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        return preprocessBitmap(bmp)
+    }
+
+    private fun preprocessBitmap(bitmap: Bitmap): FloatArray {
         val n = YoloConfig.INPUT_SIZE
-        val scaled = Bitmap.createScaledBitmap(bmp, n, n, true)
+        val scaled = Bitmap.createScaledBitmap(bitmap, n, n, true)
         val pixels = IntArray(n * n)
         scaled.getPixels(pixels, 0, n, 0, 0, n, n)
-
         val area = n * n
         val chw = FloatArray(3 * area)
         for (i in 0 until area) {
             val p = pixels[i]
-            chw[i] = ((p shr 16) and 0xFF) / 255f          // R plane
-            chw[area + i] = ((p shr 8) and 0xFF) / 255f     // G plane
-            chw[2 * area + i] = (p and 0xFF) / 255f          // B plane
+            chw[i] = ((p shr 16) and 0xFF) / 255f
+            chw[area + i] = ((p shr 8) and 0xFF) / 255f
+            chw[2 * area + i] = (p and 0xFF) / 255f
         }
         return chw
     }

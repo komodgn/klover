@@ -12,7 +12,6 @@
     <string name="action_retry">다시 찾기</string>
     <string name="action_pick_photo">사진 선택</string>
     <string name="brand_label">KLOVER</string>
-    <string name="fps_format">%d fps</string>
     <string name="scan_hint">클로버를 화면에 담아보세요</string>
     <string name="camera_permission_needed">카메라 권한이 필요해요</string>
     <string name="camera_permission_grant">권한 허용</string>

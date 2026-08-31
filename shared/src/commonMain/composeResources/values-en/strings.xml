@@ -12,7 +12,6 @@
     <string name="action_retry">Search again</string>
     <string name="action_pick_photo">Pick a photo</string>
     <string name="brand_label">KLOVER</string>
-    <string name="fps_format">%d fps</string>
     <string name="scan_hint">Point the camera at some clover</string>
     <string name="camera_permission_needed">Camera permission required</string>
     <string name="camera_permission_grant">Grant permission</string>

@@ -16,6 +16,10 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "Shared"
             isStatic = true
+            // Reduce GC stop-the-world pause frequency.
+            // The default GC triggers too aggressively with a camera + ML workload,
+            // causing periodic full-thread pauses that freeze the UI.
+            freeCompilerArgs += listOf("-Xbinary=gcSchedulerTargetHeapBytes=268435456") // 256 MB
         }
     }
 

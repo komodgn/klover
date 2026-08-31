@@ -18,7 +18,8 @@ import platform.AVFoundation.AVCaptureDevice
 import platform.AVFoundation.AVCaptureDeviceInput
 import platform.AVFoundation.AVCaptureOutput
 import platform.AVFoundation.AVCaptureSession
-import platform.AVFoundation.AVCaptureSessionPresetHigh
+import platform.AVFoundation.AVCaptureSessionPreset640x480
+import platform.AVFoundation.AVCaptureSessionPreset1280x720
 import platform.AVFoundation.AVCaptureVideoDataOutput
 import platform.AVFoundation.AVCaptureVideoDataOutputSampleBufferDelegateProtocol
 import platform.AVFoundation.AVCaptureVideoPreviewLayer
@@ -29,6 +30,8 @@ import platform.CoreGraphics.CGRectMake
 import platform.CoreMedia.CMSampleBufferGetImageBuffer
 import platform.CoreMedia.CMSampleBufferRef
 import platform.CoreML.MLModel
+import platform.CoreML.MLModelConfiguration
+import platform.CoreML.MLComputeUnitsCPUAndNeuralEngine
 import platform.CoreVideo.CVPixelBufferGetHeight
 import platform.CoreVideo.CVPixelBufferGetWidth
 import platform.CoreVideo.CVPixelBufferRelease
@@ -49,6 +52,8 @@ import platform.darwin.dispatch_get_main_queue
 import platform.darwin.dispatch_queue_create
 import platform.darwin.DISPATCH_QUEUE_PRIORITY_DEFAULT
 import platform.Foundation.NSBundle
+import kotlin.concurrent.AtomicInt
+import kotlin.concurrent.AtomicReference
 
 /** CoreML class label that counts as a four-leaf clover (matches the trained dataset). */
 private const val TARGET_LABEL = "4-Leaf-Clovers"
@@ -117,8 +122,15 @@ private class CameraPreviewUIView(
 
 private fun configureSession(session: AVCaptureSession, delegate: CloverVisionDelegate) {
     session.beginConfiguration()
-    if (session.canSetSessionPreset(AVCaptureSessionPresetHigh)) {
-        session.setSessionPreset(AVCaptureSessionPresetHigh)
+    // Prefer HD for a crisp preview; fall back to lower presets on devices that can't do 1080p.
+    // Inference still center-crops/scales to 640×640 internally, so the higher preview
+    // resolution doesn't change model input size.
+    val preset = listOf(
+        AVCaptureSessionPreset1280x720,
+        AVCaptureSessionPreset640x480,
+    ).firstOrNull { session.canSetSessionPreset(it) }
+    if (preset != null) {
+        session.setSessionPreset(preset)
     }
     val device = AVCaptureDevice.defaultDeviceWithMediaType(AVMediaTypeVideo)
     if (device != null) {
@@ -146,29 +158,45 @@ private class CloverVisionDelegate(
     var onResult: (ScanFrameResult) -> Unit,
 ) : NSObject(), AVCaptureVideoDataOutputSampleBufferDelegateProtocol {
 
-    private val request: VNCoreMLRequest? = loadRequest()
     private val inferenceQueue = dispatch_queue_create("io.github.klover.inference", null)
-    private var processing = false
+    // AtomicInt(0=idle, 1=busy) — read on camera queue, written on inferenceQueue, so must be atomic.
+    private val processing = AtomicInt(0)
+    // Loaded on inferenceQueue (background) to avoid blocking Main thread during composition.
+    // Stores the request and its pre-wrapped list together to avoid per-frame List allocation.
+    private val loadedRef = AtomicReference<Pair<VNCoreMLRequest, List<VNCoreMLRequest>>?>(null)
+
+    // Cached once so the hot path doesn't allocate a new Map on every frame.
+    private val emptyOptions: Map<Any?, Any?> = emptyMap()
+
+    init {
+        dispatch_async(inferenceQueue) {
+            val req = loadRequest() ?: return@dispatch_async
+            loadedRef.value = Pair(req, listOf(req))
+        }
+    }
     private var lastFrameTime = 0.0
     private var lastStartTime = 0.0
 
-    // Run at most ~3 inferences/sec so the Neural Engine leaves the GPU free for a smooth preview.
-    private val minInterval = 0.30
+    // ~10 inferences/sec. Safe now that inference runs on the Neural Engine (not the GPU), so it
+    // no longer contends with the GPU-bound camera preview. Combined with render-side box
+    // interpolation this tracks the clover smoothly. Lower the number for an even higher rate.
+    private val minInterval = 0.1
 
     override fun captureOutput(
         output: AVCaptureOutput,
         didOutputSampleBuffer: CMSampleBufferRef?,
         fromConnection: AVCaptureConnection,
     ) {
-        val request = request ?: return
-        // Skip while a previous frame is still being analyzed — this returns immediately so the
-        // capture pipeline (and thus the preview) is never blocked by inference.
-        if (processing) return
+        val (request, requestList) = loadedRef.value ?: return
         val startNow = CACurrentMediaTime()
         if (startNow - lastStartTime < minInterval) return
+        // Atomically acquire the inference slot — returns false if already busy.
+        if (!processing.compareAndSet(0, 1)) return
         lastStartTime = startNow
-        val pixelBuffer = CMSampleBufferGetImageBuffer(didOutputSampleBuffer) ?: return
-        processing = true
+        val pixelBuffer = CMSampleBufferGetImageBuffer(didOutputSampleBuffer) ?: run {
+            processing.value = 0
+            return
+        }
         CVPixelBufferRetain(pixelBuffer)
 
         dispatch_async(inferenceQueue) {
@@ -176,9 +204,9 @@ private class CloverVisionDelegate(
             val handler = VNImageRequestHandler(
                 cVPixelBuffer = pixelBuffer,
                 orientation = kCGImagePropertyOrientationRight,
-                options = emptyMap<Any?, Any?>(),
+                options = emptyOptions,
             )
-            handler.performRequests(listOf(request), null)
+            handler.performRequests(requestList, null)
 
             val observations = request.results
                 ?.filterIsInstance<VNRecognizedObjectObservation>()
@@ -211,17 +239,27 @@ private class CloverVisionDelegate(
             val fps = if (lastFrameTime > 0.0) (1.0 / (now - lastFrameTime)).toInt() else 0
             lastFrameTime = now
 
-            dispatch_async(dispatch_get_main_queue()) {
-                onResult(ScanFrameResult(detections, fps, uprightWidth, uprightHeight))
-            }
-            processing = false
+            // Call onResult directly from the inference queue.
+            // MutableStateFlow.value is thread-safe — the coroutine machinery dispatches
+            // the collector to Dispatchers.Main without creating a GCD lambda each cycle.
+            // Dispatching a Kotlin lambda to GCD's main queue every inference was causing
+            // Kotlin/Native GC to accumulate lambda roots and trigger STW pauses on the
+            // main thread, freezing the UI for several seconds.
+            processing.value = 0
+            onResult(ScanFrameResult(detections, fps, uprightWidth, uprightHeight))
         }
     }
 }
 
 private fun loadRequest(): VNCoreMLRequest? {
     val url = NSBundle.mainBundle.URLForResource("clover", withExtension = "mlmodelc") ?: return null
-    val mlModel = MLModel.modelWithContentsOfURL(url, null) ?: return null
+    // Run on the Neural Engine (+ CPU) but NOT the GPU. The camera preview compositing is
+    // GPU-bound, so letting inference also use the GPU makes the two contend and freezes the
+    // preview. Keeping inference off the GPU frees it for smooth preview rendering.
+    val config = MLModelConfiguration().apply {
+        computeUnits = MLComputeUnitsCPUAndNeuralEngine
+    }
+    val mlModel = MLModel.modelWithContentsOfURL(url, config, null) ?: return null
     val visionModel = VNCoreMLModel.modelForMLModel(mlModel, null) ?: return null
     return VNCoreMLRequest(visionModel).apply {
         imageCropAndScaleOption = VNImageCropAndScaleOptionCenterCrop
